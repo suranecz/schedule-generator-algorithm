@@ -301,34 +301,21 @@ class ScheduleGenerator:
 
         # 2. workCodeAverage: 근무 코드 균등 배분
         if self.option["workCodeAverage"] == "on":
-            # 각 근무자의 Z, HC, IA 개수를 계산
-            # 평균과의 차이를 최소화
-
-            # 전체 Z, PM 개수
-            total_am = sum(
-                self.shifts[(m, d, ShiftType.AM)]
-                for m in range(self.num_members)
-                for d in range(self.num_days)
-            )
-
-            total_pm = sum(
-                self.shifts[(m, d, ShiftType.PM_HC)] + self.shifts[(m, d, ShiftType.PM_IA)]
-                for m in range(self.num_members)
-                for d in range(self.num_days)
-            )
-
-            # 각 근무자의 근무 개수 차이를 페널티로
+            # 각 근무자별로 HC와 IA의 차이를 최소화 (균등 배분)
             for m in range(self.num_members):
-                am_count = sum(self.shifts[(m, d, ShiftType.AM)] for d in range(self.num_days))
-                pm_count = sum(
-                    self.shifts[(m, d, ShiftType.PM_HC)] + self.shifts[(m, d, ShiftType.PM_IA)]
-                    for d in range(self.num_days)
-                )
+                hc_count = sum(self.shifts[(m, d, ShiftType.PM_HC)] for d in range(self.num_days))
+                ia_count = sum(self.shifts[(m, d, ShiftType.PM_IA)] for d in range(self.num_days))
 
-                # 평균과의 차이를 변수로
-                # (간단히 하기 위해 전체 균등성을 목표로 함)
-                # 이 부분은 복잡도를 위해 간소화
-                pass
+                # HC와 IA의 차이를 변수로 생성 (절댓값)
+                diff_var = self.model.NewIntVar(0, self.num_days, f'hc_ia_diff_m{m}')
+
+                # diff_var >= hc_count - ia_count
+                self.model.Add(diff_var >= hc_count - ia_count)
+                # diff_var >= ia_count - hc_count
+                self.model.Add(diff_var >= ia_count - hc_count)
+
+                # 차이가 작을수록 좋음 (페널티로 추가)
+                self.penalties.append((10, diff_var))
 
     def _set_objective(self):
         """목적 함수 설정"""
